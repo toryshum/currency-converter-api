@@ -30,7 +30,7 @@ class CostsConvertedAPIView(APIView):
             internal_data = response.json()
         except requests.RequestException as e:
             return Response(
-                {'error': f'Błąd przy pobieraniu danych z API wewnętrznego: {e}'},
+                {'error': f'Error fetching data from internal API: {e}'},
                 status=status.HTTP_502_BAD_GATEWAY
             )   
 
@@ -38,7 +38,7 @@ class CostsConvertedAPIView(APIView):
             rate = get_exchange_rate_usd_to(target_currency)
         except Exception as e:
             return Response(
-                {'error': f'Nie udało się pobrać kursu waluty: {e}'},
+                {"error": f"Failed to fetch exchange rate: {e}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
