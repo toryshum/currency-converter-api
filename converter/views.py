@@ -1,55 +1,49 @@
-from django.shortcuts import render
-
 from decimal import Decimal, ROUND_HALF_UP
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .services import get_exchange_rate_usd_to
 import requests
 from django.conf import settings
-
+from .services import get_exchange_rate_usd_to
 
 class CostsConvertedAPIView(APIView):
-
     def get(self, request):
-        target_currency = request.query_params.get('currency', 'PLN').upper()
+        target_currency_list = request.query_params.getlist('currency')
+        target_currency = (target_currency_list[0] if target_currency_list else 'PLN').upper()
+        filters = {k: v for k, v in request.query_params.items() if k.lower() != 'currency'}
 
-        filters = {
-            k: v for k, v in request.query_params.items()
-            if k.lower() != 'currency'
-        }
+        internal_data = {"data": []}
 
         try:
-            response = requests.get(
-                    settings.STAG_BASE_URL,
-                    params={**filters, 'secret_key': settings.STAG_SECRET_KEY},
-                    headers={'User-Agent': 'converter/1.0'},
-                    timeout=10
-                )
-            response.raise_for_status()
-            internal_data = response.json()
+            resp = requests.get(
+                settings.STAG_BASE_URL,
+                params={**filters, 'secret_key': settings.STAG_SECRET_KEY},
+                headers={'User-Agent': 'converter/1.0'},
+                timeout=10
+            )
+            resp.raise_for_status()
+            internal_data = resp.json()
         except requests.RequestException as e:
-            return Response(
-                {'error': f'Error fetching data from internal API: {e}'},
-                status=status.HTTP_502_BAD_GATEWAY
-            )   
+            return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
+
+        data = [
+                {"campaign": "Example campaign A", "cost_usd": 100},
+                {"campaign": "Example campaign B", "cost_usd": 50},
+            ]
 
         try:
             rate = get_exchange_rate_usd_to(target_currency)
         except Exception as e:
-            return Response(
-                {"error": f"Failed to fetch exchange rate: {e}"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        data = internal_data.get('data', [])
+        target_field = f"cost_{target_currency.lower()}"
         for item in data:
             cost_usd = Decimal(str(item.get('cost_usd', 0)))
-            converted = (cost_usd * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-            item[f'cost_{target_currency.lower()}'] = float(converted)
+            converted = (cost_usd * Decimal(str(rate))).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            item[target_field] = float(converted)
 
         return Response({
-            'currency': target_currency,
-            'exchange_rate': float(rate),
-            'data': data
+            "currency": target_currency,
+            "exchange_rate": float(rate),
+            "data": data
         })

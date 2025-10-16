@@ -28,6 +28,33 @@ def fetch_rates_from_fixer(symbols):
 
 
 def get_exchange_rate_usd_to(target_currency: str) -> Decimal:
+    today = date.today()
+    target_currency = target_currency.upper()
+
+    try:
+        er = ExchangeRate.objects.get(base='USD', target=target_currency, date=today)
+        return er.rate
+
+    except ExchangeRate.DoesNotExist:
+        data = fetch_rates_from_fixer([target_currency, 'USD'])
+
+        rates = data.get('rates', {})
+        eur_to_target = Decimal(str(rates.get(target_currency)))
+        eur_to_usd = Decimal(str(rates.get('USD')))
+        usd_to_target = (eur_to_target / eur_to_usd).quantize(Decimal('0.00000001'))
+
+        ExchangeRate.objects.create(
+            base='USD',
+            target=target_currency,
+            rate=usd_to_target,
+            date=today,
+            source='fixer.io'
+        )
+
+        return usd_to_target
+
+
+def get_exchange_rate_usd_to(target_currency: str) -> Decimal:
 
     target_currency = target_currency.upper()
     today = date.today().isoformat() 
@@ -50,7 +77,8 @@ def get_exchange_rate_usd_to(target_currency: str) -> Decimal:
     rates = data.get('rates', {})
 
     if target_currency not in rates or 'USD' not in rates:
-        raise ValueError(f"Brak kursu {target_currency} lub USD w odpowiedzi Fixer: {rates.keys()}")
+        raise ValueError(f"Missing exchange rate for {target_currency} or USD in Fixer response: {rates.keys()}")
+
 
     eur_to_target = Decimal(str(rates.get(target_currency)))
     eur_to_usd = Decimal(str(rates.get('USD')))
