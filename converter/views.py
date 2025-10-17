@@ -13,7 +13,7 @@ class CostsConvertedAPIView(APIView):
         filters = {k: v for k, v in request.query_params.items() if k.lower() != 'currency'}
 
         internal_data = {"data": []}
-
+        data = []
         try:
             resp = requests.get(
                 settings.STAG_BASE_URL,
@@ -26,10 +26,7 @@ class CostsConvertedAPIView(APIView):
         except requests.RequestException as e:
             return Response({"error": str(e)}, status=status.HTTP_502_BAD_GATEWAY)
 
-        data = [
-                {"campaign": "Example campaign A", "cost_usd": 100},
-                {"campaign": "Example campaign B", "cost_usd": 50},
-            ]
+
 
         try:
             rate = get_exchange_rate_usd_to(target_currency)
